@@ -144,10 +144,8 @@ export interface ConversationState {
 
 export class RoseGlassConversation {
   private client: Anthropic;
-  private apiKey: string;
 
   constructor(apiKey: string) {
-    this.apiKey = apiKey;
     this.client = new Anthropic({
       apiKey: apiKey,
       dangerouslyAllowBrowser: true,
