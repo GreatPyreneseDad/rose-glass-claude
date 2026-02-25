@@ -87,6 +87,10 @@ export class RoseGlassConversation {
       }
     }
 
+    if (!analysisResponse) {
+      throw new Error('Failed to get response from Claude API after retries');
+    }
+
     const analysis =
       analysisResponse.content[0].type === 'text'
         ? analysisResponse.content[0].text

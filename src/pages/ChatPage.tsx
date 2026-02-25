@@ -96,7 +96,7 @@ export default function ChatPage() {
         .from('sessions')
         .insert({
           user_id: user.id,
-          mode: currentMode,
+          mode: selectedMode,
         })
         .select()
         .single();
@@ -110,7 +110,7 @@ export default function ChatPage() {
           user_id: user.id,
           role: msg.role,
           content: msg.content,
-          mode: msg.mode || currentMode,
+          mode: msg.mode || selectedMode,
         };
 
         if (msg.role === 'assistant') {
