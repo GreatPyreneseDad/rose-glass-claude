@@ -42,18 +42,44 @@ export class RoseGlassConversation {
     // Get mode-specific system prompt
     const systemPrompt = getModeSystemPrompt(mode);
 
-    // Get main Rose Glass analysis
-    const analysisResponse = await this.client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: contextualPrompt,
-        },
-      ],
-    });
+    // Get main Rose Glass analysis with retry logic
+    let analysisResponse;
+    let retries = 0;
+    const maxRetries = 3;
+
+    while (retries < maxRetries) {
+      try {
+        analysisResponse = await this.client.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: [
+            {
+              role: 'user',
+              content: contextualPrompt,
+            },
+          ],
+        });
+        break; // Success, exit retry loop
+      } catch (error: any) {
+        retries++;
+
+        // Check if it's an overload error (529)
+        if (error?.status === 529 && retries < maxRetries) {
+          // Wait before retrying (exponential backoff)
+          const waitTime = Math.pow(2, retries) * 1000; // 2s, 4s, 8s
+          console.log(`API overloaded, retrying in ${waitTime/1000}s... (attempt ${retries}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+
+        // If not overload error or max retries reached, throw
+        if (retries >= maxRetries) {
+          throw new Error('Anthropic API is currently overloaded. Please try again in a moment.');
+        }
+        throw error;
+      }
+    }
 
     const analysis =
       analysisResponse.content[0].type === 'text'

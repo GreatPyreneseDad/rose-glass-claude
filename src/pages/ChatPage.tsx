@@ -60,7 +60,13 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
       console.error('Error in handleSend:', err);
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      let errorMessage = err instanceof Error ? err.message : 'An error occurred';
+
+      // Provide helpful message for overload errors
+      if (errorMessage.includes('overloaded') || errorMessage.includes('Overloaded')) {
+        errorMessage = 'Claude API is currently experiencing high traffic. The system will automatically retry. Please wait...';
+      }
+
       console.error('Error message:', errorMessage);
       setError(errorMessage);
     } finally {
