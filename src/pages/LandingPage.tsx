@@ -24,6 +24,12 @@ export default function LandingPage() {
             >
               Start Translating
             </Link>
+            <Link
+              to="/login"
+              className="px-8 py-4 bg-transparent border-2 border-[var(--accent-primary)] text-[var(--accent-primary)] font-semibold rounded-lg hover:bg-[var(--accent-primary)]/10 transition-colors text-lg"
+            >
+              Sign In
+            </Link>
             <button
               onClick={scrollToDemo}
               className="px-8 py-4 border border-[var(--border)] text-[var(--text-secondary)] font-medium rounded-lg hover:border-[var(--accent-primary)] hover:text-[var(--text-primary)] transition-colors text-lg"

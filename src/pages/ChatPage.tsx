@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { RoseGlassConversation, type Message } from '../services/conversation';
 import type { Mode } from '../utils/commands';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+import { extractDimensionalData } from '../utils/dimensionalExtraction';
 
 export default function ChatPage() {
   const [inputText, setInputText] = useState('');
@@ -8,9 +12,24 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentMode, setCurrentMode] = useState<Mode>('analyze');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const { user, loading: authLoading, signOut } = useAuth();
+  const navigate = useNavigate();
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY || '';
 
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
+  };
+
   const conversation = new RoseGlassConversation(apiKey);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/login');
+    }
+  }, [user, authLoading, navigate]);
 
   const handleSend = async () => {
     if (!inputText.trim()) {
@@ -19,6 +38,10 @@ export default function ChatPage() {
     }
     if (!apiKey.trim()) {
       setError('API key not configured');
+      return;
+    }
+    if (!user) {
+      setError('You must be logged in');
       return;
     }
 
@@ -34,8 +57,39 @@ export default function ChatPage() {
     setError(null);
 
     try {
+      // Create session on first message
+      let currentSessionId = sessionId;
+      if (!currentSessionId) {
+        const { data: newSession, error: sessionError } = await supabase
+          .from('sessions')
+          .insert({
+            user_id: user.id,
+            mode: 'analyze',
+          })
+          .select()
+          .single();
+
+        if (sessionError) throw sessionError;
+        currentSessionId = newSession.id;
+        setSessionId(currentSessionId);
+      }
+
+      // Store user message
+      const { error: userMsgError } = await supabase.from('messages').insert({
+        session_id: currentSessionId,
+        user_id: user.id,
+        role: 'user',
+        content: inputText,
+        mode: currentMode,
+      });
+
+      if (userMsgError) throw userMsgError;
+
       const result = await conversation.analyze(inputText, messages);
       setCurrentMode(result.mode);
+
+      // Extract dimensional data
+      const dimensionalData = extractDimensionalData(result.analysis);
 
       const assistantMessage: Message = {
         role: 'assistant',
@@ -44,6 +98,31 @@ export default function ChatPage() {
         metaNotes: result.metaNotes,
         mode: result.mode,
       };
+
+      // Store assistant message with dimensional data
+      const { error: assistantMsgError } = await supabase.from('messages').insert({
+        session_id: currentSessionId,
+        user_id: user.id,
+        role: 'assistant',
+        content: result.analysis,
+        mode: result.mode,
+        psi: dimensionalData.psi,
+        rho: dimensionalData.rho,
+        q: dimensionalData.q,
+        f: dimensionalData.f,
+        distortion: dimensionalData.distortion,
+        truth_value: dimensionalData.truth_value,
+        trs: dimensionalData.trs,
+        meta_analysis: result.metaNotes,
+      });
+
+      if (assistantMsgError) throw assistantMsgError;
+
+      // Update session last_active
+      await supabase
+        .from('sessions')
+        .update({ last_active: new Date().toISOString() })
+        .eq('id', currentSessionId);
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
@@ -66,9 +145,21 @@ export default function ChatPage() {
               Coherence-Building Translation System
             </p>
           </div>
-          <div className="text-right">
+          <div className="text-right flex items-center gap-4">
+            <Link
+              to="/history"
+              className="px-3 py-1.5 border border-[var(--border)] text-[var(--text-secondary)] rounded-lg hover:border-[var(--accent-primary)] hover:text-[var(--text-primary)] transition-colors text-sm"
+            >
+              History
+            </Link>
+            <button
+              onClick={handleSignOut}
+              className="px-3 py-1.5 border border-[var(--border)] text-[var(--text-secondary)] rounded-lg hover:border-[var(--accent-primary)] hover:text-[var(--text-primary)] transition-colors text-sm"
+            >
+              Sign Out
+            </button>
             <div className="text-[var(--text-muted)] text-xs">
-              ROSE Corp. — Recognition Of Synthetic-organic Expression
+              {user?.email}
             </div>
           </div>
         </div>

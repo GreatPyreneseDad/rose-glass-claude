@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
-type Plan = 'SIGNAL' | 'COHERENCE' | 'JADE';
+type Plan = 'signal' | 'coherence' | 'jade';
 
 export default function RegisterPage() {
-  const [selectedPlan, setSelectedPlan] = useState<Plan>('COHERENCE');
+  const [selectedPlan, setSelectedPlan] = useState<Plan>('coherence');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { signUp } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -25,14 +28,22 @@ export default function RegisterPage() {
       return;
     }
 
-    // For now, just route to chat
-    // In production, this would create account and handle payment
+    setLoading(true);
+    const { error } = await signUp(email, password, selectedPlan);
+    setLoading(false);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
     navigate('/chat');
   };
 
   const plans = [
     {
-      name: 'SIGNAL' as Plan,
+      name: 'signal' as Plan,
+      displayName: 'SIGNAL',
       price: 12,
       features: [
         '100 analyses per month',
@@ -41,7 +52,8 @@ export default function RegisterPage() {
       ],
     },
     {
-      name: 'COHERENCE' as Plan,
+      name: 'coherence' as Plan,
+      displayName: 'COHERENCE',
       price: 29,
       features: [
         'Unlimited analyses',
@@ -51,7 +63,8 @@ export default function RegisterPage() {
       ],
     },
     {
-      name: 'JADE' as Plan,
+      name: 'jade' as Plan,
+      displayName: 'JADE',
       price: 97,
       features: [
         'Everything in Coherence',
@@ -87,7 +100,7 @@ export default function RegisterPage() {
               }`}
             >
               <div className="mb-4">
-                <div className="text-2xl font-bold text-[var(--accent-hot)]">{plan.name}</div>
+                <div className="text-2xl font-bold text-[var(--accent-hot)]">{plan.displayName}</div>
                 <div className="text-3xl font-bold text-[var(--text-primary)] mt-2">
                   ${plan.price}
                   <span className="text-sm text-[var(--text-muted)] font-normal">/month</span>
@@ -152,9 +165,10 @@ export default function RegisterPage() {
 
               <button
                 type="submit"
-                className="w-full py-3 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-hot)] text-white font-semibold rounded-lg hover:opacity-90 transition-opacity"
+                disabled={loading}
+                className="w-full py-3 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-hot)] text-white font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Begin Translation
+                {loading ? 'Creating Account...' : 'Begin Translation'}
               </button>
             </form>
           </div>
