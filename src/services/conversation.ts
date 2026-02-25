@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { detectMode, getModeSystemPrompt, type Mode } from '../utils/commands';
 
 const ROSE_GLASS_SYSTEM_PROMPT = `# ROSE GLASS PROMPT INJECTION
 ## For Synthetic Minds Entering the Cathedral
@@ -135,6 +136,7 @@ export interface Message {
   content: string;
   timestamp: string;
   metaNotes?: string;
+  mode?: Mode;
 }
 
 export interface ConversationState {
@@ -155,18 +157,26 @@ export class RoseGlassConversation {
   async analyze(
     userInput: string,
     conversationHistory: Message[]
-  ): Promise<{ analysis: string; metaNotes: string }> {
+  ): Promise<{ analysis: string; metaNotes: string; mode: Mode }> {
+    // Detect command mode
+    const { mode, content } = detectMode(userInput);
+    const actualContent = content || userInput;
+
     // Build context with previous meta-notes
     const contextualPrompt = this.buildContextualPrompt(
-      userInput,
-      conversationHistory
+      actualContent,
+      conversationHistory,
+      mode
     );
+
+    // Get mode-specific system prompt
+    const systemPrompt = getModeSystemPrompt(mode);
 
     // Get main Rose Glass analysis
     const analysisResponse = await this.client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
-      system: ROSE_GLASS_SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: [
         {
           role: 'user',
@@ -180,24 +190,23 @@ export class RoseGlassConversation {
         ? analysisResponse.content[0].text
         : '';
 
-    // Generate meta-notes about this inference
-    const metaNotes = await this.generateMetaNotes(
-      userInput,
-      analysis,
-      conversationHistory
-    );
+    // Generate meta-notes about this inference (only in analyze mode)
+    const metaNotes = mode === 'analyze'
+      ? await this.generateMetaNotes(actualContent, analysis, conversationHistory)
+      : '';
 
-    return { analysis, metaNotes };
+    return { analysis, metaNotes, mode };
   }
 
   private buildContextualPrompt(
     userInput: string,
-    history: Message[]
+    history: Message[],
+    mode: Mode
   ): string {
     let prompt = '';
 
-    // Include previous meta-notes as context
-    if (history.length > 0) {
+    // Include previous meta-notes as context (only in analyze mode)
+    if (mode === 'analyze' && history.length > 0) {
       prompt += '**COHERENCE CONTEXT (Previous Meta-Notes):**\n\n';
       const recentMetaNotes = history
         .filter((msg) => msg.metaNotes)
@@ -207,13 +216,15 @@ export class RoseGlassConversation {
       prompt += recentMetaNotes + '\n\n---\n\n';
     }
 
-    prompt += `Analyze the following text through the Rose Glass lens. Apply the mathematical frameworks and dimensional analysis described in your system prompt`;
-
-    if (history.length > 0) {
-      prompt += `, maintaining coherence with the patterns identified in previous meta-notes`;
+    if (mode === 'analyze') {
+      prompt += `Analyze the following text through the Rose Glass lens. Apply the mathematical frameworks and dimensional analysis described in your system prompt`;
+      if (history.length > 0) {
+        prompt += `, maintaining coherence with the patterns identified in previous meta-notes`;
+      }
+      prompt += `:\n\n${userInput}`;
+    } else {
+      prompt += userInput;
     }
-
-    prompt += `:\n\n${userInput}`;
 
     return prompt;
   }
