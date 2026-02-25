@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { RoseGlassConversation, type Message } from '../services/conversation';
 import type { Mode } from '../utils/commands';
@@ -13,7 +13,7 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentMode, setCurrentMode] = useState<Mode>('analyze');
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY || '';
 
@@ -23,13 +23,6 @@ export default function ChatPage() {
   };
 
   const conversation = new RoseGlassConversation(apiKey);
-
-  // Optional: Redirect to login if not authenticated (commented out to allow anonymous usage)
-  // useEffect(() => {
-  //   if (!authLoading && !user) {
-  //     navigate('/login');
-  //   }
-  // }, [user, authLoading, navigate]);
 
   const handleSend = async () => {
     if (!inputText.trim()) {
