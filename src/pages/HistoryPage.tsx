@@ -22,8 +22,11 @@ export default function HistoryPage() {
   useEffect(() => {
     if (user) {
       loadSessions();
+    } else if (!authLoading) {
+      // Not logged in, just set loading to false
+      setLoading(false);
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   const loadSessions = async () => {
     if (!user) return;
