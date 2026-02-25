@@ -63,8 +63,8 @@ export default function ChatPage() {
       let errorMessage = err instanceof Error ? err.message : 'An error occurred';
 
       // Provide helpful message for overload errors
-      if (errorMessage.includes('overloaded') || errorMessage.includes('Overloaded')) {
-        errorMessage = 'Claude API is currently experiencing high traffic. The system will automatically retry. Please wait...';
+      if (errorMessage.includes('overloaded') || errorMessage.includes('Overloaded') || errorMessage.includes('529')) {
+        errorMessage = '⚠️ Claude API is currently experiencing high traffic. Please try again in a few minutes. Your message has been saved in the chat.';
       }
 
       console.error('Error message:', errorMessage);
