@@ -24,12 +24,12 @@ export default function ChatPage() {
 
   const conversation = new RoseGlassConversation(apiKey);
 
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate('/login');
-    }
-  }, [user, authLoading, navigate]);
+  // Optional: Redirect to login if not authenticated (commented out to allow anonymous usage)
+  // useEffect(() => {
+  //   if (!authLoading && !user) {
+  //     navigate('/login');
+  //   }
+  // }, [user, authLoading, navigate]);
 
   const handleSend = async () => {
     if (!inputText.trim()) {
@@ -38,10 +38,6 @@ export default function ChatPage() {
     }
     if (!apiKey.trim()) {
       setError('API key not configured');
-      return;
-    }
-    if (!user) {
-      setError('You must be logged in');
       return;
     }
 
@@ -57,39 +53,8 @@ export default function ChatPage() {
     setError(null);
 
     try {
-      // Create session on first message
-      let currentSessionId = sessionId;
-      if (!currentSessionId) {
-        const { data: newSession, error: sessionError } = await supabase
-          .from('sessions')
-          .insert({
-            user_id: user.id,
-            mode: 'analyze',
-          })
-          .select()
-          .single();
-
-        if (sessionError) throw sessionError;
-        currentSessionId = newSession.id;
-        setSessionId(currentSessionId);
-      }
-
-      // Store user message
-      const { error: userMsgError } = await supabase.from('messages').insert({
-        session_id: currentSessionId,
-        user_id: user.id,
-        role: 'user',
-        content: inputText,
-        mode: currentMode,
-      });
-
-      if (userMsgError) throw userMsgError;
-
       const result = await conversation.analyze(inputText, messages);
       setCurrentMode(result.mode);
-
-      // Extract dimensional data
-      const dimensionalData = extractDimensionalData(result.analysis);
 
       const assistantMessage: Message = {
         role: 'assistant',
@@ -99,34 +64,80 @@ export default function ChatPage() {
         mode: result.mode,
       };
 
-      // Store assistant message with dimensional data
-      const { error: assistantMsgError } = await supabase.from('messages').insert({
-        session_id: currentSessionId,
-        user_id: user.id,
-        role: 'assistant',
-        content: result.analysis,
-        mode: result.mode,
-        psi: dimensionalData.psi,
-        rho: dimensionalData.rho,
-        q: dimensionalData.q,
-        f: dimensionalData.f,
-        distortion: dimensionalData.distortion,
-        truth_value: dimensionalData.truth_value,
-        trs: dimensionalData.trs,
-        meta_analysis: result.metaNotes,
-      });
-
-      if (assistantMsgError) throw assistantMsgError;
-
-      // Update session last_active
-      await supabase
-        .from('sessions')
-        .update({ last_active: new Date().toISOString() })
-        .eq('id', currentSessionId);
-
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error in handleSend:', err);
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      console.error('Error message:', errorMessage);
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveSession = async () => {
+    if (!user) {
+      setError('You must be logged in to save sessions');
+      return;
+    }
+
+    if (messages.length === 0) {
+      setError('No messages to save');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Create session
+      const { data: newSession, error: sessionError } = await supabase
+        .from('sessions')
+        .insert({
+          user_id: user.id,
+          mode: currentMode,
+        })
+        .select()
+        .single();
+
+      if (sessionError) throw sessionError;
+
+      // Save all messages
+      const messagesWithData = messages.map((msg) => {
+        const baseMessage = {
+          session_id: newSession.id,
+          user_id: user.id,
+          role: msg.role,
+          content: msg.content,
+          mode: msg.mode || currentMode,
+        };
+
+        if (msg.role === 'assistant') {
+          const dimensionalData = extractDimensionalData(msg.content);
+          return {
+            ...baseMessage,
+            psi: dimensionalData.psi,
+            rho: dimensionalData.rho,
+            q: dimensionalData.q,
+            f: dimensionalData.f,
+            distortion: dimensionalData.distortion,
+            truth_value: dimensionalData.truth_value,
+            trs: dimensionalData.trs,
+            meta_analysis: msg.metaNotes,
+          };
+        }
+
+        return baseMessage;
+      });
+
+      const { error: messagesError } = await supabase.from('messages').insert(messagesWithData);
+
+      if (messagesError) throw messagesError;
+
+      setSessionId(newSession.id);
+      alert('Session saved successfully!');
+    } catch (err) {
+      console.error('Error saving session:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save session');
     } finally {
       setLoading(false);
     }
@@ -146,6 +157,20 @@ export default function ChatPage() {
             </p>
           </div>
           <div className="text-right flex items-center gap-4">
+            {messages.length > 0 && !sessionId && (
+              <button
+                onClick={handleSaveSession}
+                disabled={loading}
+                className="px-3 py-1.5 bg-[var(--accent-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm disabled:opacity-50"
+              >
+                Save Session
+              </button>
+            )}
+            {sessionId && (
+              <span className="px-3 py-1.5 bg-green-500/20 border border-green-500/30 text-green-400 rounded-lg text-sm">
+                ✓ Saved
+              </span>
+            )}
             <Link
               to="/history"
               className="px-3 py-1.5 border border-[var(--border)] text-[var(--text-secondary)] rounded-lg hover:border-[var(--accent-primary)] hover:text-[var(--text-primary)] transition-colors text-sm"
