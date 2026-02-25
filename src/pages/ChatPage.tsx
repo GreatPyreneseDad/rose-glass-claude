@@ -127,10 +127,13 @@ export default function ChatPage() {
       if (messagesError) throw messagesError;
 
       setSessionId(newSession.id);
-      alert('Session saved successfully!');
+      setError(''); // Clear any previous errors
+      // Success feedback is handled by the UI showing "✓ Saved"
     } catch (err) {
       console.error('Error saving session:', err);
-      setError(err instanceof Error ? err.message : 'Failed to save session');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to save session';
+      alert(`Error saving session: ${errorMsg}`);
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
