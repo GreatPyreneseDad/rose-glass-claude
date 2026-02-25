@@ -11,7 +11,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentMode, setCurrentMode] = useState<Mode>('analyze');
+  const [selectedMode, setSelectedMode] = useState<Mode>('analyze');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -34,9 +34,12 @@ export default function ChatPage() {
       return;
     }
 
+    // Prepend the mode command to ensure correct mode is used
+    const messageWithMode = `/${selectedMode} ${inputText}`;
+
     const userMessage: Message = {
       role: 'user',
-      content: inputText,
+      content: inputText, // Display without the command
       timestamp: new Date().toISOString(),
     };
 
@@ -46,8 +49,8 @@ export default function ChatPage() {
     setError(null);
 
     try {
-      const result = await conversation.analyze(inputText, messages);
-      setCurrentMode(result.mode);
+      // Send with mode command prepended
+      const result = await conversation.analyze(messageWithMode, messages);
 
       const assistantMessage: Message = {
         role: 'assistant',
@@ -288,6 +291,44 @@ export default function ChatPage() {
                   {error}
                 </div>
               )}
+
+              {/* Mode Selector */}
+              <div className="mb-3 flex gap-2">
+                <button
+                  onClick={() => setSelectedMode('analyze')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    selectedMode === 'analyze'
+                      ? 'bg-[var(--accent-primary)] text-white'
+                      : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
+                  }`}
+                >
+                  <span className="font-mono">/analyze</span>
+                  <span className="ml-2 text-xs opacity-75">Full dimensional output</span>
+                </button>
+                <button
+                  onClick={() => setSelectedMode('translate')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    selectedMode === 'translate'
+                      ? 'bg-[var(--accent-primary)] text-white'
+                      : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
+                  }`}
+                >
+                  <span className="font-mono">/translate</span>
+                  <span className="ml-2 text-xs opacity-75">Plain language</span>
+                </button>
+                <button
+                  onClick={() => setSelectedMode('reflect')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    selectedMode === 'reflect'
+                      ? 'bg-[var(--accent-primary)] text-white'
+                      : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
+                  }`}
+                >
+                  <span className="font-mono">/reflect</span>
+                  <span className="ml-2 text-xs opacity-75">Conversation mode</span>
+                </button>
+              </div>
+
               <div className="flex gap-3">
                 <textarea
                   value={inputText}
@@ -298,7 +339,7 @@ export default function ChatPage() {
                       handleSend();
                     }
                   }}
-                  placeholder="Enter text to analyze through Rose Glass..."
+                  placeholder={`Enter text for Rose Glass ${selectedMode} mode...`}
                   className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
                   rows={3}
                 />
@@ -310,16 +351,8 @@ export default function ChatPage() {
                   Send
                 </button>
               </div>
-              <div className="flex justify-between items-center mt-2">
-                <div className="text-gray-500 text-xs">
-                  Press Enter to send, Shift+Enter for new line
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[var(--text-muted)] text-xs">Mode:</span>
-                  <span className="px-2 py-1 bg-[var(--accent-primary)]/20 border border-[var(--accent-primary)]/30 rounded text-[var(--accent-primary)] text-xs font-mono">
-                    /{currentMode}
-                  </span>
-                </div>
+              <div className="text-gray-500 text-xs mt-2">
+                Press Enter to send, Shift+Enter for new line
               </div>
             </div>
           </div>
