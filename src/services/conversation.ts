@@ -63,19 +63,25 @@ export class RoseGlassConversation {
         break; // Success, exit retry loop
       } catch (error: any) {
         retries++;
+        console.error(`API request failed (attempt ${retries}/${maxRetries}):`, error);
 
-        // Check if it's an overload error (529)
-        if (error?.status === 529 && retries < maxRetries) {
+        // Check if it's an overload error (529) - Anthropic SDK errors have status_code
+        const isOverloaded = error?.status === 529 ||
+                            error?.status_code === 529 ||
+                            error?.message?.includes('overloaded') ||
+                            error?.message?.includes('Overloaded');
+
+        if (isOverloaded && retries < maxRetries) {
           // Wait before retrying (exponential backoff)
           const waitTime = Math.pow(2, retries) * 1000; // 2s, 4s, 8s
-          console.log(`API overloaded, retrying in ${waitTime/1000}s... (attempt ${retries}/${maxRetries})`);
+          console.log(`⏳ API overloaded, waiting ${waitTime/1000}s before retry ${retries + 1}/${maxRetries}...`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
           continue;
         }
 
         // If not overload error or max retries reached, throw
-        if (retries >= maxRetries) {
-          throw new Error('Anthropic API is currently overloaded. Please try again in a moment.');
+        if (retries >= maxRetries && isOverloaded) {
+          throw new Error('Anthropic API is currently overloaded. Please try again in a few minutes.');
         }
         throw error;
       }
