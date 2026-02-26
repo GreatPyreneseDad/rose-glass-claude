@@ -144,7 +144,7 @@ export default function LandingPage() {
             <div className="text-gray-400 text-sm mb-2">per year</div>
             <div className="text-pink-400 text-xs mb-6">Skip trial · start today</div>
             <Link
-              to="/register"
+              to="/register?plan=annual"
               className="block w-full py-3 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-semibold rounded-xl transition-all text-center text-sm"
             >
               Subscribe Annually
