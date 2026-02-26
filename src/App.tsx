@@ -5,8 +5,17 @@ import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
 import ChatPage from './pages/ChatPage';
 import HistoryPage from './pages/HistoryPage';
+import PaywallPage from './pages/PaywallPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading, hasAccess } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!hasAccess) return <Navigate to="/paywall" replace />;
+  return <>{children}</>;
+}
+
+function AuthRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
@@ -21,6 +30,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/paywall" element={<AuthRoute><PaywallPage /></AuthRoute>} />
           <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
           <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
         </Routes>
