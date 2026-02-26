@@ -17,12 +17,15 @@ export default function LandingPage() {
             Rose Glass translates the architecture of human communication. Not what people say.
             What the signal underneath actually contains.
           </p>
+          <p className="text-sm text-[var(--text-muted)]">
+            30-day free trial · $9.99/month · Cancel anytime
+          </p>
           <div className="flex gap-4 justify-center items-center flex-wrap">
             <Link
               to="/register"
               className="px-8 py-4 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-hot)] text-white font-semibold rounded-lg hover:opacity-90 transition-opacity text-lg"
             >
-              Start Translating
+              Start Free Trial
             </Link>
             <Link
               to="/login"
@@ -112,6 +115,38 @@ export default function LandingPage() {
           <p className="text-[var(--text-muted)] text-sm text-center pt-4">
             Default mode (no command): /analyze
           </p>
+        </div>
+      </div>
+
+      {/* Pricing Section */}
+      <div className="container mx-auto px-6 py-20 max-w-lg text-center">
+        <h2 className="text-3xl font-bold text-[var(--text-primary)] mb-3">Simple pricing</h2>
+        <p className="text-[var(--text-secondary)] mb-10">Start free. No card required for trial.</p>
+        <div className="bg-slate-800 border border-purple-500/20 rounded-2xl p-10">
+          <div className="text-5xl font-bold text-white mb-1">$9.99</div>
+          <div className="text-gray-400 mb-2">per month</div>
+          <div className="text-purple-400 text-sm mb-8">30-day free trial to start</div>
+          <ul className="text-left space-y-3 text-sm text-gray-300 mb-8">
+            {[
+              'Full dimensional analysis (Ψ, ρ, q, f)',
+              'Unlimited translation sessions',
+              'Coherence history & trajectory tracking',
+              'Meta-notes across conversations',
+              'All three modes: analyze, translate, reflect',
+            ].map(item => (
+              <li key={item} className="flex items-start gap-2">
+                <span className="text-purple-400 mt-0.5">✦</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+          <Link
+            to="/register"
+            className="block w-full py-4 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white font-semibold rounded-xl transition-all duration-200 text-lg"
+          >
+            Start Free Trial
+          </Link>
+          <p className="text-gray-500 text-xs mt-4">Cancel anytime. No commitment.</p>
         </div>
       </div>
 
