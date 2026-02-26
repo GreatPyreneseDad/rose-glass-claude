@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { RoseGlassConversation, type Message } from '../services/conversation';
 import type { Mode } from '../utils/commands';
@@ -15,25 +15,18 @@ export default function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY || '';
+  const conversation = useRef(new RoseGlassConversation()).current;
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
   };
 
-  const conversation = new RoseGlassConversation(apiKey);
-
   const handleSend = async () => {
     if (!inputText.trim()) {
       setError('Please enter text to analyze');
       return;
     }
-    if (!apiKey.trim()) {
-      setError('API key not configured');
-      return;
-    }
-
     // Prepend the mode command to ensure correct mode is used
     const messageWithMode = `/${selectedMode} ${inputText}`;
 
