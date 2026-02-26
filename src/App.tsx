@@ -6,6 +6,8 @@ import LoginPage from './pages/LoginPage';
 import ChatPage from './pages/ChatPage';
 import HistoryPage from './pages/HistoryPage';
 import PaywallPage from './pages/PaywallPage';
+import PrivacyPage from './pages/PrivacyPage';
+import TermsPage from './pages/TermsPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, hasAccess } = useAuth();
@@ -33,6 +35,8 @@ function App() {
           <Route path="/paywall" element={<AuthRoute><PaywallPage /></AuthRoute>} />
           <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
           <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
