@@ -21,9 +21,9 @@ export default function PrivacyPage() {
             <p>Payment processing is handled entirely by Stripe. Rose Glass does not store credit card numbers or banking information. We receive only subscription status from Stripe.</p>
           </section>
 
-          <section>
-            <h2 className="text-xl font-semibold text-white mb-3">Data retention</h2>
-            <p>Your session data is retained for as long as your account is active. You may request deletion of your data at any time by contacting us at the email below.</p>
+          <section id="data-deletion">
+            <h2 className="text-xl font-semibold text-white mb-3">Data deletion</h2>
+            <p>Your session data is retained for as long as your account is active. To request complete deletion of your account and all associated data, email us at <a href="mailto:cherryandcammy@protonmail.com" className="text-purple-400 hover:underline">cherryandcammy@protonmail.com</a> with the subject line "Data Deletion Request." We will process your request within 30 days.</p>
           </section>
 
           <section>
