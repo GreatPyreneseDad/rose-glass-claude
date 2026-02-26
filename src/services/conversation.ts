@@ -7,16 +7,22 @@ export interface Message {
   timestamp: string;
   metaNotes?: string;
   mode?: Mode;
+  dimensions?: DimensionalScores;
 }
 
-export interface ConversationState {
-  messages: Message[];
-  metaHistory: string[];
+export interface DimensionalScores {
+  psi: number | null;
+  rho: number | null;
+  q: number | null;
+  f: number | null;
+  distortion: number | null;
+  truth_value: number | null;
+  trs: number | null;
 }
 
-// ─── Proxy call (API key lives server-side in Edge Function) ─────────────────
+// ─── Proxy call ───────────────────────────────────────────────────────────────
 
-async function callClaude(payload: object): Promise<string> {
+async function callClaude(payload: object): Promise<any> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
@@ -51,12 +57,39 @@ async function callClaude(payload: object): Promise<string> {
       throw new Error(err?.error || `API error ${response.status}`);
     }
 
-    const data = await response.json();
-    return data.content?.[0]?.type === 'text' ? data.content[0].text : '';
+    return await response.json();
   }
 
   throw new Error('Failed to get response after retries');
 }
+
+function extractText(data: any): string {
+  return data.content?.find((b: any) => b.type === 'text')?.text ?? '';
+}
+
+function extractToolInput(data: any): any {
+  return data.content?.find((b: any) => b.type === 'tool_use')?.input ?? null;
+}
+
+// ─── Dimensional extraction tool definition ───────────────────────────────────
+
+const DIMENSIONAL_TOOL = {
+  name: 'report_dimensions',
+  description: 'Report the Rose Glass dimensional scores for the analyzed text. Only report dimensions you can actually observe. Set to null if insufficient signal.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      psi:         { type: ['number', 'null'], description: 'Ψ — Internal consistency (0-1)' },
+      rho:         { type: ['number', 'null'], description: 'ρ — Witness density / accumulated wisdom (0-1)' },
+      q:           { type: ['number', 'null'], description: 'q — Moral/emotional activation (0-1)' },
+      f:           { type: ['number', 'null'], description: 'f — Social belonging architecture (0-1)' },
+      distortion:  { type: ['number', 'null'], description: 'D(P) — Distortion value (0+, can exceed 1)' },
+      truth_value: { type: ['number', 'null'], description: 'T — Truth value (can be negative)' },
+      trs:         { type: ['number', 'null'], description: 'Tᵣ(Q) — Truthwave readiness score (0-1)' },
+    },
+    required: ['psi', 'rho', 'q', 'f', 'distortion', 'truth_value', 'trs'],
+  },
+};
 
 // ─── Conversation class ───────────────────────────────────────────────────────
 
@@ -64,24 +97,58 @@ export class RoseGlassConversation {
   async analyze(
     userInput: string,
     conversationHistory: Message[]
-  ): Promise<{ analysis: string; metaNotes: string; mode: Mode }> {
+  ): Promise<{ analysis: string; metaNotes: string; mode: Mode; dimensions: DimensionalScores }> {
     const { mode, content } = detectMode(userInput);
     const actualContent = content || userInput;
     const systemPrompt = getModeSystemPrompt(mode);
     const contextualPrompt = this.buildContextualPrompt(actualContent, conversationHistory, mode);
 
-    const analysis = await callClaude({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: contextualPrompt }],
-    });
+    // In analyze mode: use tool_use to get structured dimensional scores
+    // In other modes: plain text response
+    let analysis = '';
+    let dimensions: DimensionalScores = {
+      psi: null, rho: null, q: null, f: null,
+      distortion: null, truth_value: null, trs: null,
+    };
+
+    if (mode === 'analyze') {
+      const data = await callClaude({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: systemPrompt,
+        tools: [DIMENSIONAL_TOOL],
+        tool_choice: { type: 'auto' },
+        messages: [{ role: 'user', content: contextualPrompt }],
+      });
+
+      analysis = extractText(data);
+      const toolInput = extractToolInput(data);
+      if (toolInput) {
+        dimensions = {
+          psi:         toolInput.psi         ?? null,
+          rho:         toolInput.rho         ?? null,
+          q:           toolInput.q           ?? null,
+          f:           toolInput.f           ?? null,
+          distortion:  toolInput.distortion  ?? null,
+          truth_value: toolInput.truth_value ?? null,
+          trs:         toolInput.trs         ?? null,
+        };
+      }
+    } else {
+      const data = await callClaude({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: contextualPrompt }],
+      });
+      analysis = extractText(data);
+    }
 
     const metaNotes = mode === 'analyze'
       ? await this.generateMetaNotes(actualContent, analysis, conversationHistory)
       : '';
 
-    return { analysis, metaNotes, mode };
+    return { analysis, metaNotes, mode, dimensions };
   }
 
   private buildContextualPrompt(userInput: string, history: Message[], mode: Mode): string {
@@ -98,7 +165,7 @@ export class RoseGlassConversation {
     }
 
     if (mode === 'analyze') {
-      prompt += `Analyze the following text through the Rose Glass lens. Apply the mathematical frameworks and dimensional analysis described in your system prompt`;
+      prompt += `Analyze the following text through the Rose Glass lens. Provide your full dimensional analysis, then call the report_dimensions tool with the scores you observed`;
       if (history.length > 0) prompt += `, maintaining coherence with the patterns identified in previous meta-notes`;
       prompt += `:\n\n${userInput}`;
     } else {
@@ -128,10 +195,12 @@ Generate meta-notes that capture:
 
 Be concise but precise. These notes guide future inferences.`;
 
-    return await callClaude({
+    const data = await callClaude({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 800,
       messages: [{ role: 'user', content: metaPrompt }],
     });
+
+    return extractText(data);
   }
 }
