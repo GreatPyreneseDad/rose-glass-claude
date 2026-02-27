@@ -8,6 +8,7 @@ export interface Message {
   metaNotes?: string;
   mode?: Mode;
   dimensions?: DimensionalScores;
+  imageData?: { base64: string; mediaType: string }; // client-only, not persisted
 }
 
 export interface DimensionalScores {
@@ -96,12 +97,21 @@ const DIMENSIONAL_TOOL = {
 export class RoseGlassConversation {
   async analyze(
     userInput: string,
-    conversationHistory: Message[]
+    conversationHistory: Message[],
+    imageData?: { base64: string; mediaType: string }
   ): Promise<{ analysis: string; metaNotes: string; mode: Mode; dimensions: DimensionalScores }> {
     const { mode, content } = detectMode(userInput);
     const actualContent = content || userInput;
     const systemPrompt = getModeSystemPrompt(mode);
     const contextualPrompt = this.buildContextualPrompt(actualContent, conversationHistory, mode);
+
+    // Build user content: image block + text, or just text
+    const userContent: any = imageData
+      ? [
+          { type: 'image', source: { type: 'base64', media_type: imageData.mediaType, data: imageData.base64 } },
+          { type: 'text', text: contextualPrompt },
+        ]
+      : contextualPrompt;
 
     // In analyze mode: use tool_use to get structured dimensional scores
     // In other modes: plain text response
@@ -118,7 +128,7 @@ export class RoseGlassConversation {
         system: systemPrompt,
         tools: [DIMENSIONAL_TOOL],
         tool_choice: { type: 'auto' },
-        messages: [{ role: 'user', content: contextualPrompt }],
+        messages: [{ role: 'user', content: userContent }],
       });
 
       analysis = extractText(data);
@@ -139,7 +149,7 @@ export class RoseGlassConversation {
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4096,
         system: systemPrompt,
-        messages: [{ role: 'user', content: contextualPrompt }],
+        messages: [{ role: 'user', content: userContent }],
       });
       analysis = extractText(data);
     }

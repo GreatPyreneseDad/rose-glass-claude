@@ -12,14 +12,54 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedMode, setSelectedMode] = useState<Mode>('analyze');
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [pendingImage, setPendingImage] = useState<{ base64: string; mediaType: string; previewUrl: string } | null>(null);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const conversation = useRef(new RoseGlassConversation()).current;
   const sessionIdRef = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(',')[1];
+      const mediaType = file.type;
+      setPendingImage({ base64, mediaType, previewUrl: dataUrl });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const exportChat = () => {
+    const lines = messages.map(msg => {
+      const role = msg.role === 'user' ? 'You' : 'Rose Glass';
+      let text = `### ${role}\n\n${msg.content}`;
+      if (msg.dimensions) {
+        const dims = (['psi', 'rho', 'q', 'f', 'distortion', 'truth_value', 'trs'] as const)
+          .filter(d => msg.dimensions![d] !== null)
+          .map(d => `${d}: ${msg.dimensions![d]}`)
+          .join(' | ');
+        if (dims) text += `\n\n> ${dims}`;
+      }
+      if (msg.metaNotes) text += `\n\n<details><summary>Meta-Notes</summary>\n\n${msg.metaNotes}\n\n</details>`;
+      return text;
+    });
+    const md = `# Rose Glass Conversation\n\n_Exported ${new Date().toLocaleString()}_\n\n---\n\n${lines.join('\n\n---\n\n')}\n`;
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rose-glass-${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // ── Auto-persist: create session on first exchange, append on subsequent ──
@@ -78,25 +118,32 @@ export default function ChatPage() {
   };
 
   const handleSend = async () => {
-    if (!inputText.trim()) {
-      setError('Please enter text to analyze');
+    if (!inputText.trim() && !pendingImage) {
+      setError('Please enter text or attach an image to analyze');
       return;
     }
 
     const messageWithMode = `/${selectedMode} ${inputText}`;
+    const currentImage = pendingImage;
     const userMessage: Message = {
       role: 'user',
       content: inputText,
       timestamp: new Date().toISOString(),
+      imageData: currentImage ? { base64: currentImage.base64, mediaType: currentImage.mediaType } : undefined,
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
+    setPendingImage(null);
     setLoading(true);
     setError(null);
 
     try {
-      const result = await conversation.analyze(messageWithMode, messages);
+      const result = await conversation.analyze(
+        messageWithMode,
+        messages,
+        currentImage ? { base64: currentImage.base64, mediaType: currentImage.mediaType } : undefined
+      );
 
       const assistantMessage: Message = {
         role: 'assistant',
@@ -138,6 +185,14 @@ export default function ChatPage() {
               <span className="px-3 py-1.5 bg-green-500/20 border border-green-500/30 text-green-400 rounded-lg text-sm">
                 ✓ Auto-saving
               </span>
+            )}
+            {messages.length > 0 && (
+              <button
+                onClick={exportChat}
+                className="px-3 py-1.5 border border-[var(--border)] text-[var(--text-secondary)] rounded-lg hover:border-[var(--accent-primary)] hover:text-[var(--text-primary)] transition-colors text-sm"
+              >
+                Export Chat
+              </button>
             )}
             <Link
               to="/history"
@@ -184,6 +239,13 @@ export default function ChatPage() {
                         <span className="text-white text-sm font-medium">{msg.role === 'user' ? 'U' : 'RG'}</span>
                       </div>
                       <div className="flex-1">
+                        {msg.imageData && (
+                          <img
+                            src={`data:${msg.imageData.mediaType};base64,${msg.imageData.base64}`}
+                            alt="Attached"
+                            className="max-w-xs max-h-48 rounded-lg mb-2 border border-slate-600"
+                          />
+                        )}
                         <div className="text-gray-300 whitespace-pre-wrap text-sm">{msg.content}</div>
                         {msg.dimensions && msg.role === 'assistant' && (
                           <div className="mt-2 flex gap-3 flex-wrap">
@@ -235,7 +297,23 @@ export default function ChatPage() {
                   </button>
                 ))}
               </div>
+              {pendingImage && (
+                <div className="mb-3 flex items-center gap-2">
+                  <img src={pendingImage.previewUrl} alt="Preview" className="h-16 w-16 object-cover rounded-lg border border-purple-500/30" />
+                  <button onClick={() => setPendingImage(null)} className="text-gray-400 hover:text-red-400 text-sm">&times; Remove</button>
+                </div>
+              )}
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleImageSelect} className="hidden" />
               <div className="flex gap-3">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 bg-slate-800 border border-slate-700 rounded-lg text-gray-400 hover:text-purple-400 hover:border-purple-500/50 transition-colors"
+                  title="Attach image"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </button>
                 <textarea
                   value={inputText}
                   onChange={e => setInputText(e.target.value)}
@@ -246,13 +324,13 @@ export default function ChatPage() {
                 />
                 <button
                   onClick={handleSend}
-                  disabled={loading || !inputText.trim()}
+                  disabled={loading || (!inputText.trim() && !pendingImage)}
                   className="px-6 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Send
                 </button>
               </div>
-              <div className="text-gray-500 text-xs mt-2">Press Enter to send, Shift+Enter for new line</div>
+              <div className="text-gray-500 text-xs mt-2">Press Enter to send, Shift+Enter for new line. Attach an image to analyze visuals.</div>
             </div>
           </div>
         </div>
