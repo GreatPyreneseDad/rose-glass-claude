@@ -164,22 +164,68 @@ export class RoseGlassConversation {
   private buildContextualPrompt(userInput: string, history: Message[], mode: Mode): string {
     let prompt = '';
 
-    if (mode === 'analyze' && history.length > 0) {
-      prompt += '**COHERENCE CONTEXT (Previous Meta-Notes):**\n\n';
+    if (history.length > 0) {
+      const contextParts: string[] = [];
+
+      // 1. Dimensional trajectory from analyze exchanges
+      const analyzeMessages = history.filter(m => m.role === 'assistant' && m.dimensions && m.mode === 'analyze');
+      if (analyzeMessages.length > 0) {
+        const latest = analyzeMessages[analyzeMessages.length - 1];
+        const d = latest.dimensions!;
+        const scores = [
+          d.psi !== null ? `Ψ ${d.psi.toFixed(2)}` : null,
+          d.rho !== null ? `ρ ${d.rho.toFixed(2)}` : null,
+          d.q !== null ? `q ${d.q.toFixed(2)}` : null,
+          d.f !== null ? `f ${d.f.toFixed(2)}` : null,
+          d.distortion !== null ? `D(P) ${d.distortion.toFixed(2)}` : null,
+          d.truth_value !== null ? `T ${d.truth_value.toFixed(2)}` : null,
+          d.trs !== null ? `Tᵣ ${d.trs.toFixed(2)}` : null,
+        ].filter(Boolean).join(' | ');
+
+        if (analyzeMessages.length > 1) {
+          const prev = analyzeMessages[analyzeMessages.length - 2];
+          const pd = prev.dimensions!;
+          const trajectory = [
+            pd.psi !== null && d.psi !== null ? `Ψ ${pd.psi.toFixed(2)}→${d.psi.toFixed(2)}` : null,
+            pd.q !== null && d.q !== null ? `q ${pd.q.toFixed(2)}→${d.q.toFixed(2)}` : null,
+            pd.distortion !== null && d.distortion !== null ? `D(P) ${pd.distortion.toFixed(2)}→${d.distortion.toFixed(2)}` : null,
+          ].filter(Boolean).join(' | ');
+          contextParts.push(`**Dimensional State:** ${scores}\n**Trajectory:** ${trajectory}`);
+        } else {
+          contextParts.push(`**Dimensional State:** ${scores}`);
+        }
+      }
+
+      // 2. Recent meta-notes (compressed session wisdom)
       const recentMetaNotes = history
         .filter(msg => msg.metaNotes)
-        .slice(-3)
+        .slice(-2)
         .map(msg => msg.metaNotes)
         .join('\n\n');
-      prompt += recentMetaNotes + '\n\n---\n\n';
+      if (recentMetaNotes) {
+        contextParts.push(`**Session Meta-Notes:**\n${recentMetaNotes}`);
+      }
+
+      // 3. Recent conversation exchanges (last 4 messages for continuity)
+      const recentExchanges = history.slice(-4).map(m => {
+        const role = m.role === 'user' ? 'User' : `Rose Glass [${m.mode || 'analyze'}]`;
+        return `${role}: ${m.content.slice(0, 400)}${m.content.length > 400 ? '...' : ''}`;
+      }).join('\n\n');
+      if (recentExchanges) {
+        contextParts.push(`**Recent Exchanges:**\n${recentExchanges}`);
+      }
+
+      if (contextParts.length > 0) {
+        prompt += `**SESSION CONTEXT:**\n\n${contextParts.join('\n\n')}\n\n---\n\n`;
+      }
     }
 
     if (mode === 'analyze') {
-      prompt += `Analyze the following text through the Rose Glass lens. Provide your full dimensional analysis, then call the report_dimensions tool with the scores you observed`;
-      if (history.length > 0) prompt += `, maintaining coherence with the patterns identified in previous meta-notes`;
-      prompt += `:\n\n${userInput}`;
+      prompt += `Analyze the following through the Rose Glass lens. Maintain coherence with the session state above. Provide full dimensional output, then call the report_dimensions tool:\n\n${userInput}`;
+    } else if (mode === 'translate') {
+      prompt += `The session context above informs your reading. Translate what you see in plain language — what the framework observes, what it means, what matters. No scores, no notation. Speak directly:\n\n${userInput}`;
     } else {
-      prompt += userInput;
+      prompt += `The session context above is your ground. Engage naturally. The lens is on but invisible:\n\n${userInput}`;
     }
 
     return prompt;
