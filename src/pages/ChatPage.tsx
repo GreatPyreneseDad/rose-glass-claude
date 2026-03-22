@@ -226,7 +226,7 @@ export default function ChatPage() {
       <div className="bg-[var(--sidebar-bg)] border-b border-[var(--border)] px-6 py-4">
         <div className="max-w-screen-2xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--accent-hot)]">Rose Glass</h1>
+            <div className="flex items-center gap-3"><img src="/logo.png" alt="Rose Glass" className="h-10 w-10 rounded-lg" /><h1 className="text-2xl font-bold text-[var(--accent-hot)]">Rose Glass</h1></div>
             <p className="text-[var(--text-muted)] text-sm mt-1">Coherence-Building Translation System</p>
           </div>
           <div className="text-right flex items-center gap-4">
