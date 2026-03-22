@@ -3,12 +3,12 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
-type Plan = 'monthly' | 'annual';
+type Plan = 'free' | 'monthly' | 'annual';
 
 export default function RegisterPage() {
   const [searchParams] = useSearchParams();
   const [selectedPlan, setSelectedPlan] = useState<Plan>(
-    searchParams.get('plan') === 'annual' ? 'annual' : 'monthly'
+    (searchParams.get('plan') as Plan) || 'free'
   );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,7 +18,7 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const { signUp } = useAuth();
 
-  const startCheckout = async (plan: Plan) => {
+  const startCheckout = async (plan: 'monthly' | 'annual') => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
@@ -57,23 +57,36 @@ export default function RegisterPage() {
       return;
     }
 
-    if (selectedPlan === 'annual') {
-      await startCheckout('annual');
-    } else {
+    if (selectedPlan === 'free') {
       navigate('/chat');
+    } else {
+      await startCheckout(selectedPlan);
     }
     setLoading(false);
   };
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-lg">
         <div className="text-center mb-8">
           <Link to="/" className="text-3xl font-bold text-[var(--accent-hot)]">Rose Glass</Link>
         </div>
 
         {/* Plan Toggle */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <button
+            onClick={() => setSelectedPlan('free')}
+            className={`rounded-xl p-4 border-2 text-left transition-all ${
+              selectedPlan === 'free'
+                ? 'border-green-500 bg-slate-800'
+                : 'border-slate-700 bg-slate-900 hover:border-slate-500'
+            }`}
+          >
+            <div className="text-xs text-gray-400 mb-0.5">Free</div>
+            <div className="text-xl font-bold text-white">$0</div>
+            <div className="text-green-400 text-xs mt-1">3 analyses/month</div>
+          </button>
+
           <button
             onClick={() => setSelectedPlan('monthly')}
             className={`rounded-xl p-4 border-2 text-left transition-all ${
@@ -98,7 +111,7 @@ export default function RegisterPage() {
             <div className="absolute -top-2.5 right-3 bg-pink-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">SAVE $70</div>
             <div className="text-xs text-gray-400 mb-0.5">Annual</div>
             <div className="text-xl font-bold text-white">$39.99<span className="text-xs font-normal text-gray-400">/yr</span></div>
-            <div className="text-pink-400 text-xs mt-1">Start today, no trial</div>
+            <div className="text-pink-400 text-xs mt-1">Unlimited analyses</div>
           </button>
         </div>
 
@@ -152,14 +165,18 @@ export default function RegisterPage() {
                 ? 'Creating Account...'
                 : selectedPlan === 'annual'
                   ? 'Create Account & Subscribe — $39.99/yr'
-                  : 'Start Free Trial'}
+                  : selectedPlan === 'monthly'
+                    ? 'Start Free Trial'
+                    : 'Get Started Free'}
             </button>
           </form>
 
           <p className="text-[var(--text-muted)] text-xs text-center mt-5">
             {selectedPlan === 'annual'
               ? 'Secure payment via Stripe. Cancel anytime.'
-              : 'No credit card required. Cancel anytime after trial.'}
+              : selectedPlan === 'monthly'
+                ? 'No credit card required. Cancel anytime after trial.'
+                : 'No credit card required. 3 analyses per month, forever.'}
           </p>
         </div>
 

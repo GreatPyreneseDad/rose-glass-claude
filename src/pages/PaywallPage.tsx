@@ -83,8 +83,8 @@ export default function PaywallPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="max-w-xl w-full text-center">
           <div className="text-6xl mb-6">🌹</div>
-          <h2 className="text-3xl font-bold text-white mb-3">Your trial has ended</h2>
-          <p className="text-gray-400 mb-10 text-lg">Choose a plan to continue.</p>
+          <h2 className="text-3xl font-bold text-white mb-3">Upgrade Rose Glass</h2>
+          <p className="text-gray-400 mb-10 text-lg">Unlock unlimited analyses, full dimensional tracking, and coherence history.</p>
 
           {/* Plan Toggle */}
           <div className="grid grid-cols-2 gap-4 mb-6">

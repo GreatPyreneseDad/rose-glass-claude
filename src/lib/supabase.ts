@@ -17,18 +17,22 @@ export type Database = {
           id: string;
           email: string;
           subscription_tier: 'signal' | 'coherence' | 'jade';
-          subscription_status: 'active' | 'inactive' | 'trial';
+          subscription_status: 'active' | 'inactive' | 'trial' | 'free' | 'canceled' | 'expired';
           created_at: string;
+          monthly_analyses_used: number;
+          monthly_analyses_reset: string | null;
+          trial_ends_at: string | null;
         };
         Insert: {
           id: string;
           email: string;
           subscription_tier?: 'signal' | 'coherence' | 'jade';
-          subscription_status?: 'active' | 'inactive' | 'trial';
+          subscription_status?: 'active' | 'inactive' | 'trial' | 'free' | 'canceled' | 'expired';
         };
         Update: {
           subscription_tier?: 'signal' | 'coherence' | 'jade';
-          subscription_status?: 'active' | 'inactive' | 'trial';
+          subscription_status?: 'active' | 'inactive' | 'trial' | 'free' | 'canceled' | 'expired';
+          monthly_analyses_used?: number;
         };
       };
       sessions: {

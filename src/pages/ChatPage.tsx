@@ -13,7 +13,8 @@ export default function ChatPage() {
   const [selectedMode, setSelectedMode] = useState<Mode>('analyze');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<{ base64: string; mediaType: string; previewUrl: string } | null>(null);
-  const { user, signOut } = useAuth();
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const { user, signOut, isFreeTier, analysesRemaining, incrementUsage } = useAuth();
   const navigate = useNavigate();
   const conversation = useRef(new RoseGlassConversation()).current;
   const sessionIdRef = useRef<string | null>(null);
@@ -62,6 +63,15 @@ export default function ChatPage() {
     URL.revokeObjectURL(url);
   };
 
+  // ── Auto-title: generate a short title from first user message ──
+
+  const autoTitleSession = async (sid: string, firstMessage: string) => {
+    const title = firstMessage.length > 60
+      ? firstMessage.slice(0, 57) + '...'
+      : firstMessage;
+    await supabase.from('sessions').update({ title }).eq('id', sid);
+  };
+
   // ── Auto-persist: create session on first exchange, append on subsequent ──
 
   const persistMessages = async (userMsg: Message, assistantMsg: Message, mode: Mode) => {
@@ -82,6 +92,9 @@ export default function ChatPage() {
         sid = newSession.id;
         sessionIdRef.current = sid;
         setSessionId(sid);
+
+        // Auto-title from first user message
+        autoTitleSession(sid, userMsg.content);
       }
 
       const rows = [
@@ -123,6 +136,15 @@ export default function ChatPage() {
       return;
     }
 
+    // Check free tier usage before sending
+    if (isFreeTier) {
+      const { allowed, remaining } = await incrementUsage();
+      if (!allowed) {
+        setShowUpgradePrompt(true);
+        return;
+      }
+    }
+
     const messageWithMode = `/${selectedMode} ${inputText}`;
     const currentImage = pendingImage;
     const userMessage: Message = {
@@ -162,7 +184,7 @@ export default function ChatPage() {
     } catch (err) {
       let errorMessage = err instanceof Error ? err.message : 'An error occurred';
       if (errorMessage.includes('overloaded') || errorMessage.includes('529')) {
-        errorMessage = '⚠️ Claude API is currently experiencing high traffic. Please try again in a few minutes.';
+        errorMessage = 'Claude API is currently experiencing high traffic. Please try again in a few minutes.';
       }
       setError(errorMessage);
     } finally {
@@ -173,6 +195,33 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col">
+      {/* Upgrade Prompt Modal */}
+      {showUpgradePrompt && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4">
+          <div className="bg-slate-800 border border-purple-500/30 rounded-2xl p-8 max-w-md w-full text-center">
+            <div className="text-4xl mb-4">🌹</div>
+            <h3 className="text-xl font-bold text-white mb-2">Free analyses used</h3>
+            <p className="text-gray-400 mb-6">
+              You've used your 3 free analyses this month. Upgrade to unlock unlimited sessions, full dimensional tracking, and coherence history.
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => navigate('/paywall')}
+                className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white font-semibold rounded-xl transition-all"
+              >
+                Upgrade — from $9.99/month
+              </button>
+              <button
+                onClick={() => setShowUpgradePrompt(false)}
+                className="w-full py-3 border border-slate-600 text-gray-400 rounded-xl hover:border-slate-500 transition-colors"
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-[var(--sidebar-bg)] border-b border-[var(--border)] px-6 py-4">
         <div className="max-w-screen-2xl mx-auto flex items-center justify-between">
@@ -181,9 +230,19 @@ export default function ChatPage() {
             <p className="text-[var(--text-muted)] text-sm mt-1">Coherence-Building Translation System</p>
           </div>
           <div className="text-right flex items-center gap-4">
+            {/* Free tier usage indicator */}
+            {isFreeTier && (
+              <span className={`px-3 py-1.5 rounded-lg text-sm border ${
+                analysesRemaining > 0
+                  ? 'bg-purple-500/20 border-purple-500/30 text-purple-400'
+                  : 'bg-red-500/20 border-red-500/30 text-red-400'
+              }`}>
+                {analysesRemaining}/3 free
+              </span>
+            )}
             {sessionId && (
               <span className="px-3 py-1.5 bg-green-500/20 border border-green-500/30 text-green-400 rounded-lg text-sm">
-                ✓ Auto-saving
+                Auto-saving
               </span>
             )}
             {messages.length > 0 && (
@@ -228,6 +287,12 @@ export default function ChatPage() {
                       </div>
                     ))}
                   </div>
+                  {isFreeTier && (
+                    <div className="mt-6 text-sm text-gray-400">
+                      <span className="text-purple-400 font-medium">{analysesRemaining} free analyses</span> remaining this month.{' '}
+                      <Link to="/paywall" className="text-pink-400 hover:underline">Upgrade for unlimited</Link>
+                    </div>
+                  )}
                 </div>
               )}
 
