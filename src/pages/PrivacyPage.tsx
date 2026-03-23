@@ -23,13 +23,13 @@ export default function PrivacyPage() {
 
           <section id="data-deletion">
             <h2 className="text-xl font-semibold text-white mb-3">Data deletion</h2>
-            <p>Your session data is retained for as long as your account is active. To request complete deletion of your account and all associated data, email us at <a href="mailto:admin@roseglass.dev" className="text-purple-400 hover:underline">admin@roseglass.dev</a> with the subject line "Data Deletion Request." We will process your request within 30 days.</p>
+            <p>Your session data is retained for as long as your account is active. To request complete deletion of your account and all associated data, email us at <a href="mailto:Legal@roseglass.dev" className="text-purple-400 hover:underline">Legal@roseglass.dev</a> with the subject line "Data Deletion Request." We will process your request within 30 days.</p>
           </section>
 
           <section>
             <h2 className="text-xl font-semibold text-white mb-3">Contact</h2>
             <p>MacGregor Holding Company | Jackson Hole, Wyoming<br />
-            <a href="mailto:admin@roseglass.dev" className="text-purple-400 hover:underline">admin@roseglass.dev</a></p>
+            <a href="mailto:Legal@roseglass.dev" className="text-purple-400 hover:underline">Legal@roseglass.dev</a></p>
           </section>
         </div>
       </div>

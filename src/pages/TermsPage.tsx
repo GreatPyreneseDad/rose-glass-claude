@@ -34,7 +34,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-white mb-3">Contact</h2>
             <p>MacGregor Holding Company | Jackson Hole, Wyoming<br />
-            <a href="mailto:admin@roseglass.dev" className="text-purple-400 hover:underline">admin@roseglass.dev</a></p>
+            <a href="mailto:Legal@roseglass.dev" className="text-purple-400 hover:underline">Legal@roseglass.dev</a></p>
           </section>
         </div>
       </div>
