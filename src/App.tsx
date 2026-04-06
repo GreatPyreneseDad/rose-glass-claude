@@ -10,9 +10,11 @@ import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading, hasAccess } = useAuth();
+  const { user, profile, loading, hasAccess } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
+  // Wait for profile to load before checking access — prevents paywall flash
+  if (!profile) return null;
   if (!hasAccess) return <Navigate to="/paywall" replace />;
   return <>{children}</>;
 }
