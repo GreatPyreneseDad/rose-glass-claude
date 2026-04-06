@@ -94,7 +94,7 @@ export default function ChatPage() {
         setSessionId(sid);
 
         // Auto-title from first user message
-        autoTitleSession(sid, userMsg.content);
+        if (sid) autoTitleSession(sid, userMsg.content);
       }
 
       const rows = [
@@ -138,7 +138,7 @@ export default function ChatPage() {
 
     // Check free tier usage before sending
     if (isFreeTier) {
-      const { allowed, remaining } = await incrementUsage();
+      const { allowed } = await incrementUsage();
       if (!allowed) {
         setShowUpgradePrompt(true);
         return;
