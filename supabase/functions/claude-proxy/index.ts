@@ -1,12 +1,13 @@
 /**
- * roseglass.app — claude-proxy v3
+ * roseglass.app — claude-proxy v4
  * 
  * Passthrough proxy that AUGMENTS the frontend's payload:
  * 1. Calls CERATA bridge on the user's latest message
  * 2. Appends bridge readings to the system prompt
  * 3. Ensures web_search tool is included
- * 4. Stores Fibonacci memory after response
- * 5. Passes everything else through untouched
+ * 4. Handles web search tool_use loop server-side
+ * 5. Stores Fibonacci memory after response
+ * 6. Passes everything else through untouched
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -25,6 +26,20 @@ function bucket(v: number): string {
   if (v < 0.50) return "moderate";
   if (v < 0.75) return "elevated";
   return "high";
+}
+
+// Call Anthropic API
+async function callAnthropic(body: any, apiKey: string): Promise<any> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify(body),
+  });
+  return await res.json();
 }
 
 serve(async (req) => {
@@ -49,13 +64,7 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!anthropicKey) {
-      return new Response(JSON.stringify({ error: 'API key not configured' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!;
 
     // Extract latest user text for bridge perception
     const messages = body.messages || [];
@@ -70,7 +79,7 @@ serve(async (req) => {
       }
     }
 
-    // Call CERATA bridge for real perception (non-blocking, with fallback)
+    // Call CERATA bridge
     let cxReading: any = null;
     let computeSource = 'none';
     if (userText.length > 5) {
@@ -83,111 +92,112 @@ serve(async (req) => {
         });
         if (bridgeRes.ok) {
           cxReading = await bridgeRes.json();
-          if (cxReading?.success) {
-            computeSource = 'python-nematocysts';
-          } else {
-            cxReading = null;
-          }
+          if (cxReading?.success) computeSource = 'python-nematocysts';
+          else cxReading = null;
         }
-      } catch {
-        // Bridge unavailable — proceed without
-      }
+      } catch { /* proceed without bridge */ }
     }
 
-    // Augment system prompt with bridge readings (append, don't replace)
+    // Augment system prompt with bridge readings
     let systemPrompt = body.system || '';
     if (cxReading) {
       const z = cxReading.zones || {};
-      const q = z.q || { A: 0 };
-      const f = z.f || { A: 0 };
-      const rho = z.rho || { A: 0 };
-      const psi = z.psi || { A: 0 };
-
       const perception: string[] = [];
-      if (bucket(q.A) === "elevated" || bucket(q.A) === "high") perception.push("High emotional activation.");
-      else if (bucket(q.A) === "zero" || bucket(q.A) === "low") perception.push("Low activation.");
-      if (bucket(rho.A) === "elevated" || bucket(rho.A) === "high") perception.push("Deep reflective register.");
-      else if (bucket(rho.A) === "zero" || bucket(rho.A) === "low") perception.push("Reactive register.");
-      if (bucket(f.A) === "elevated" || bucket(f.A) === "high") perception.push("Strong belonging signal.");
-      else if (bucket(f.A) === "zero" || bucket(f.A) === "low") perception.push("Low belonging.");
+      const q = z.q?.A || 0, f = z.f?.A || 0, rho = z.rho?.A || 0, psi = z.psi?.A || 0;
+      if (bucket(q) === "elevated" || bucket(q) === "high") perception.push("High emotional activation.");
+      else if (bucket(q) === "zero" || bucket(q) === "low") perception.push("Low activation.");
+      if (bucket(rho) === "elevated" || bucket(rho) === "high") perception.push("Deep reflective register.");
+      else if (bucket(rho) === "zero" || bucket(rho) === "low") perception.push("Reactive register.");
+      if (bucket(f) === "elevated" || bucket(f) === "high") perception.push("Strong belonging.");
+      else if (bucket(f) === "zero" || bucket(f) === "low") perception.push("Low belonging.");
       if (cxReading.has_dark_spot) perception.push("DARK SPOT detected.");
 
-      systemPrompt += `\n\n---\nROSE GLASS BRIDGE (live computed via CERATA v2):
-Ψ=${psi.A.toFixed(3)} (${bucket(psi.A)}) | ρ=${rho.A.toFixed(3)} (${bucket(rho.A)}) | q=${q.A.toFixed(3)} (${bucket(q.A)}) | f=${f.A.toFixed(3)} (${bucket(f.A)})
-C(x)=${(cxReading.Cx || 0).toFixed(4)}
-${perception.join(" ")}
-Let these readings shape your perception. Don't mention the numbers unless asked.`;
+      systemPrompt += `\n\n---\nROSE GLASS BRIDGE (CERATA v2):\nΨ=${psi.toFixed(3)} ρ=${rho.toFixed(3)} q=${q.toFixed(3)} f=${f.toFixed(3)} C(x)=${(cxReading.Cx||0).toFixed(4)}\n${perception.join(" ")}\nLet readings shape perception. Don't mention numbers unless asked.`;
     }
 
-    // Ensure web_search tool is present
+    // Ensure web_search tool
     const tools = body.tools ? [...body.tools] : [];
-    const hasWebSearch = tools.some((t: any) => 
-      t.type === 'web_search_20250305' || t.name === 'web_search'
-    );
-    if (!hasWebSearch) {
+    if (!tools.some((t: any) => t.type === 'web_search_20250305' || t.name === 'web_search')) {
       tools.push({ type: 'web_search_20250305', name: 'web_search' });
     }
 
-    // Build augmented payload (preserve everything from frontend)
-    const augmentedBody = {
-      ...body,
-      system: systemPrompt,
-      tools: tools.length > 0 ? tools : undefined,
-    };
+    // First API call
+    const augmentedBody = { ...body, system: systemPrompt, tools };
+    let data = await callAnthropic(augmentedBody, anthropicKey);
 
-    // Call Anthropic
-    const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify(augmentedBody),
-    });
+    // Handle web search tool use loop
+    // When Claude uses web search, stop_reason is "end_turn" but content contains
+    // server_tool_use + web_search_tool_result blocks mixed with text.
+    // The text blocks already contain Claude's response incorporating the search results.
+    // BUT if stop_reason is "tool_use" (for non-web tools like report_dimensions),
+    // we need to handle that differently.
+    
+    // Check if response has tool_use blocks that need continuation
+    // (web search is handled automatically by the API — results come back inline)
+    // The issue is: when Claude calls report_dimensions AND web_search in the same turn,
+    // we might get stop_reason: "tool_use" which needs the tool result fed back.
+    
+    if (data.stop_reason === 'tool_use') {
+      // Find tool_use blocks (not server_tool_use which is web search)
+      const toolUseBlocks = (data.content || []).filter(
+        (b: any) => b.type === 'tool_use'
+      );
+      
+      if (toolUseBlocks.length > 0) {
+        // Build tool results for non-web-search tools
+        const toolResults = toolUseBlocks.map((block: any) => ({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: JSON.stringify(block.input), // echo back the input as result
+        }));
 
-    const data = await anthropicResponse.json();
+        // Continue the conversation with tool results
+        const continuationMessages = [
+          ...augmentedBody.messages,
+          { role: 'assistant', content: data.content },
+          { role: 'user', content: toolResults },
+        ];
 
-    // Store Fibonacci memory (fire-and-forget)
-    if (cxReading?.success) {
-      try {
-        const serviceClient = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-        );
-        const rho = cxReading.zones?.rho?.A || 0;
-        const fibPos = rho > 0.5 ? 8 : rho > 0.25 ? 5 : 3;
-        const tierName = fibPos === 8 ? "pattern" : fibPos === 5 ? "context" : "event";
-        const assistantText = data.content
-          ?.filter((b: any) => b.type === 'text')
-          .map((b: any) => b.text || '')
-          .join('') || '';
-
-        await serviceClient.from('fibonacci_memories').insert({
-          fib_position: fibPos,
-          tier: tierName,
-          content: `${userText.substring(0, 300)} | ${assistantText.substring(0, 300)}`,
-          psi: cxReading.zones?.psi?.A || 0,
-          rho,
-          q: cxReading.zones?.q?.A || 0,
-          f: cxReading.zones?.f?.A || 0,
-          coherence: cxReading.Cx || 0,
-          psi_bucket: bucket(cxReading.zones?.psi?.A || 0),
-          rho_bucket: bucket(rho),
-          q_bucket: bucket(cxReading.zones?.q?.A || 0),
-          f_bucket: bucket(cxReading.zones?.f?.A || 0),
-          context_domain: 'roseglass_app',
-        });
-      } catch { /* memory insert failed silently */ }
+        data = await callAnthropic({
+          ...augmentedBody,
+          messages: continuationMessages,
+        }, anthropicKey);
+      }
     }
 
-    // Return response with bridge readings attached
+    // Extract ALL text from the response, including text mixed with search results
+    const finalText = (data.content || [])
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text || '')
+      .join('');
+
+    // Store Fibonacci memory
+    if (cxReading?.success) {
+      try {
+        const sc = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        const rho = cxReading.zones?.rho?.A || 0;
+        const fibPos = rho > 0.5 ? 8 : rho > 0.25 ? 5 : 3;
+        const tier = fibPos === 8 ? "pattern" : fibPos === 5 ? "context" : "event";
+        await sc.from('fibonacci_memories').insert({
+          fib_position: fibPos, tier,
+          content: `${userText.substring(0, 300)} | ${finalText.substring(0, 300)}`,
+          psi: cxReading.zones?.psi?.A || 0, rho,
+          q: cxReading.zones?.q?.A || 0, f: cxReading.zones?.f?.A || 0,
+          coherence: cxReading.Cx || 0,
+          psi_bucket: bucket(cxReading.zones?.psi?.A || 0), rho_bucket: bucket(rho),
+          q_bucket: bucket(cxReading.zones?.q?.A || 0), f_bucket: bucket(cxReading.zones?.f?.A || 0),
+          context_domain: 'roseglass_app',
+        });
+      } catch { /* silent */ }
+    }
+
+    // Return response with bridge readings
     return new Response(JSON.stringify({
       ...data,
       cx: cxReading || undefined,
       compute_source: computeSource,
     }), {
-      status: anthropicResponse.status,
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error: any) {

@@ -65,7 +65,12 @@ async function callClaude(payload: object): Promise<any> {
 }
 
 function extractText(data: any): string {
-  return data.content?.find((b: any) => b.type === 'text')?.text ?? '';
+  // Get ALL text blocks — web search responses have multiple text blocks
+  // interspersed with server_tool_use and web_search_tool_result blocks
+  return (data.content || [])
+    .filter((b: any) => b.type === 'text')
+    .map((b: any) => b.text || '')
+    .join('');
 }
 
 function extractToolInput(data: any): any {
